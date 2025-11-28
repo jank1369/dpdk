@@ -660,6 +660,15 @@ main(int argc, char **argv)
 	unsigned int nb_mbufs;
 
 	/* Init EAL. 8< */
+	/*DPDK 的 EAL（Environment Abstraction Layer）初始化函数,主要功能：
+		解析命令行参数：处理 DPDK 特定的 EAL 参数（如 -l, -n, --huge-dir 等）
+		初始化 CPU 和核心：检测并初始化逻辑核心（lcores）
+		内存初始化：设置大页内存（hugepages）
+		设备扫描：扫描 PCI 总线上的设备
+		中断初始化：初始化中断处理机制
+		日志系统：初始化日志功能
+		插件系统：加载和初始化插件
+	*/
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Invalid EAL arguments\n");
