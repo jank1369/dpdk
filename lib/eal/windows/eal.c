@@ -152,9 +152,12 @@ rte_eal_cleanup(void)
 	return 0;
 }
 
-/* Launch threads, called at application init(). */
-RTE_EXPORT_SYMBOL(rte_eal_init)
+/* Launch threads, called at application init().
+这是一个导出宏，标记后面的 rte_eal_init 函数为共享库对外可见的符号（即库的公共 API），链接生成的动态库后外部程序可以调用它。
+*/
+RTE_EXPORT_SYMBOL(rte_eal_init) 
 int
+/*解析/保存命令行、初始化日志、CPU/NUMA、hugepages、内存子系统、总线/设备扫描、创建主/工作线程并设置亲和性、初始化服务框架等*/
 rte_eal_init(int argc, char **argv)
 {
 	int i, fctret, bscan;
