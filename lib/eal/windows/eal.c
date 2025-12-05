@@ -158,6 +158,7 @@ int
 rte_eal_init(int argc, char **argv)
 {
 	int i, fctret, bscan;
+	//
 	const struct rte_config *config = rte_eal_get_configuration();
 	struct internal_config *internal_conf =
 		eal_get_internal_configuration();
