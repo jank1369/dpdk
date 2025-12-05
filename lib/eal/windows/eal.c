@@ -161,19 +161,23 @@ int
 rte_eal_init(int argc, char **argv)
 {
 	int i, fctret, bscan;
-	//
+	//返回全局配置结构体指针，掌控着 CPU 核、内存布局、进程类型、NUMA 信息等一切运行时核心状态，所有 DPDK 高级功能（多进程、hotplug、per-lcore 变量）都靠它实现。
 	const struct rte_config *config = rte_eal_get_configuration();
+	//共享内存的配置信息（mempool 配置、ring 配置、memzone、tailq、日志级别、PCI 设备列表、版本号等)，dpdk自用，上层通常用不着。
 	struct internal_config *internal_conf =
 		eal_get_internal_configuration();
 	bool has_phys_addr;
 	enum rte_iova_mode iova_mode;
 	int ret;
+	//用来格式化打印 CPU 亲和性（cpuset）和线程名称的固定大小字符缓冲区（主要是日志输出用）
 	char cpuset[RTE_CPU_AFFINITY_STR_LEN];
 	char thread_name[RTE_THREAD_NAME_SIZE];
 
 	/* clone argv to report out later in telemetry */
+	//把程序启动时的完整命令行参数（argc + argv）原封不动地保存一份到全局共享内存里，让所有 secondary 进程也能看到 primary 进程是怎么被启动的。
 	eal_save_args(argc, argv);
 
+	//把用户输入的参数（如 hugepage、lcore mask、file-prefix、socket-mem）进行整理、复制、重排，使它们符合 EAL 内部预期格式。
 	fctret = eal_collate_args(argc, argv);
 	if (fctret < 0) {
 		rte_eal_init_alert("Invalid command line arguments.");
@@ -182,14 +186,18 @@ rte_eal_init(int argc, char **argv)
 	}
 
 	/* setup log as early as possible */
+	//解析所有与日志相关的命令行参数（如 --log-level, -l, --log-opt 等
+	//返回数<0 表示解析失败(参数冲突/不合法/级别错误等)
 	if (eal_parse_log_options() < 0) {
 		rte_eal_init_alert("invalid log arguments.");
 		rte_errno = EINVAL;
 		goto err_out;
 	}
 
+	//初始化 DPDK 全局日志系统
 	eal_log_init(NULL);
 
+	//读取并解析 Linux 下 /sys/devices/system/cpu/ 里的 CPU 拓扑信息，构建 DPDK 内部的 rte_cpu_info 结构
 	if (eal_create_cpu_map() < 0) {
 		rte_eal_init_alert("Cannot discover CPU and NUMA.");
 		/* rte_errno is set */

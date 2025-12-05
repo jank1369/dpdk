@@ -24,7 +24,7 @@ static struct rte_mem_config early_mem_config = {
 };
 
 /* Address of global and public configuration */
-static struct rte_config rte_config = {
+static struct rte_config  rte_config = {
 	.mem_config = &early_mem_config,
 };
 

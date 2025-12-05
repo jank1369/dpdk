@@ -223,6 +223,7 @@ eal_collate_args(int argc, char **argv)
 
 	/* parse the arguments */
 	eal_argparse.prog_name = argv[0];
+	//调用 argparse 库的通用参数解析函数，把用户输入的命令行参数逐个解析并存入 args 结构体对应字段中
 	int retval = rte_argparse_parse(&eal_argparse, argc, argv);
 	if (retval < 0)
 		return retval;
@@ -235,6 +236,7 @@ eal_collate_args(int argc, char **argv)
 	}
 
 	/* for non-list args, we can just check for zero/null values using macro */
+	//检测命令行参数之间是否存在互斥/冲突关系
 	if (CONFLICTING_OPTIONS(args, coremask, lcores) ||
 			CONFLICTING_OPTIONS(args, service_coremask, service_corelist) ||
 			CONFLICTING_OPTIONS(args, no_telemetry, telemetry) ||
@@ -358,6 +360,7 @@ handle_eal_info_request(const char *cmd, const char *params __rte_unused,
 }
 
 int
+//拷贝 argc 和 argv 参数到堆上，保存一份完整的命令行参数备份，以便后续 telemetry 模块查询使用
 eal_save_args(int argc, char **argv)
 {
 	int i, j;
@@ -370,10 +373,12 @@ eal_save_args(int argc, char **argv)
 	/* clone argv to report out later. We overprovision, but
 	 * this does not waste huge amounts of memory
 	 */
+	//在堆上新分配一个大小为 (argc + 1) 的 char ** 数组（指针数组），并全部初始化为 NULL
 	eal_args = calloc(argc + 1, sizeof(*eal_args));
 	if (eal_args == NULL)
 		return -1;
-
+	
+	//逐个复制每个参数字符串（深拷贝！）
 	for (i = 0; i < argc; i++) {
 		if (strcmp(argv[i], "--") == 0)
 			break;
@@ -381,7 +386,7 @@ eal_save_args(int argc, char **argv)
 		if (eal_args[i] == NULL)
 			goto error;
 	}
-	eal_args[i++] = NULL; /* always finish with NULL */
+	eal_args[i++] = NULL; /* always finish with NULL ，结尾 NULL，符合 execve 规范，内核靠这个 NULL 来判断参数到哪里结束，否则有panic和安全风险*/
 
 	/* allow reporting of any app args we know about too */
 	if (i >= argc)
@@ -401,6 +406,7 @@ eal_save_args(int argc, char **argv)
 	return 0;
 
 error:
+	// 回收前面分配的内存
 	eal_clean_saved_args();
 	return -1;
 }
