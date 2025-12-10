@@ -635,6 +635,7 @@ rte_eal_init(int argc, char **argv)
 	// 把 internal_config 结构体恢复到“干净的默认状态”，确保上一次 rte_eal_init() 遗留的脏数据不会影响本次初始化（多进程加载）
 	eal_reset_internal_config(internal_conf);
 
+	// 主要负责检测、整理和初始化系统中所有的逻辑 CPU 核，为后续的 lcore（logical core）调度、多线程运行做好准备
 	if (rte_eal_cpu_init() < 0) {
 		rte_eal_init_alert("Cannot detect lcores.");
 		rte_errno = ENOTSUP;
