@@ -564,7 +564,11 @@ out:
 }
 
 /* Launch threads, called at application init(). */
+/*
+这是一个导出宏，标记后面的 rte_eal_init 函数为共享库对外可见的符号（即库的公共 API），链接生成的动态库后外部程序可以调用它。
+*/
 RTE_EXPORT_SYMBOL(rte_eal_init)
+/*解析/保存命令行、初始化日志、CPU/NUMA、hugepages、内存子系统、总线/设备扫描、创建主/工作线程并设置亲和性、初始化服务框架等*/
 int
 rte_eal_init(int argc, char **argv)
 {
@@ -574,7 +578,9 @@ rte_eal_init(int argc, char **argv)
 	char cpuset[RTE_CPU_AFFINITY_STR_LEN];
 	char thread_name[RTE_THREAD_NAME_SIZE];
 	bool phys_addrs;
+	//返回全局配置结构体指针，掌控着 CPU 核、内存布局、进程类型、NUMA 信息等一切运行时核心状态，所有 DPDK 高级功能（多进程、hotplug、per-lcore 变量）都靠它实现。
 	const struct rte_config *config = rte_eal_get_configuration();
+	//共享内存的配置信息（mempool 配置、ring 配置、memzone、tailq、日志级别、PCI 设备列表、版本号等)，dpdk自用，上层通常用不着。
 	struct internal_config *internal_conf =
 		eal_get_internal_configuration();
 
@@ -587,8 +593,10 @@ rte_eal_init(int argc, char **argv)
 	}
 
 	/* clone argv to report out later in telemetry */
+	//把程序启动时的完整命令行参数（argc + argv）原封不动地保存一份到全局共享内存里，让所有 secondary 进程也能看到 primary 进程是怎么被启动的。
 	eal_save_args(argc, argv);
 
+	//把用户输入的参数（如 hugepage、lcore mask、file-prefix、socket-mem）进行整理、复制、重排，使它们符合 EAL 内部预期格式。
 	fctret = eal_collate_args(argc, argv);
 	if (fctret < 0) {
 		rte_eal_init_alert("Invalid command line arguments.");
@@ -597,15 +605,19 @@ rte_eal_init(int argc, char **argv)
 	}
 
 	/* setup log as early as possible */
+	//解析所有与日志相关的命令行参数（如 --log-level, -l, --log-opt 等
+	//返回数<0 表示解析失败(参数冲突/不合法/级别错误等)
 	if (eal_parse_log_options() < 0) {
 		rte_eal_init_alert("invalid log arguments.");
 		rte_errno = EINVAL;
 		goto err_out;
 	}
 
+	//初始化 DPDK 全局日志系统
 	eal_log_init(program_invocation_short_name);
 
 	/* checks if the machine is adequate */
+	// verify if CPU is supported by DPDK
 	if (!rte_cpu_is_supported()) {
 		rte_eal_init_alert("unsupported cpu type.");
 		rte_errno = ENOTSUP;
@@ -613,12 +625,14 @@ rte_eal_init(int argc, char **argv)
 	}
 
 	/* verify if DPDK supported on architecture MMU */
+	// 检测MMU是否支持Radix（老的PowerPC架构可能不支持），其他的都默认支持
 	if (!eal_mmu_supported()) {
 		rte_eal_init_alert("unsupported MMU type.");
 		rte_errno = ENOTSUP;
 		goto err_out;
 	}
 
+	// 把 internal_config 结构体恢复到“干净的默认状态”，确保上一次 rte_eal_init() 遗留的脏数据不会影响本次初始化（多进程加载）
 	eal_reset_internal_config(internal_conf);
 
 	if (rte_eal_cpu_init() < 0) {

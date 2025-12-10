@@ -64,6 +64,10 @@ typedef struct __rte_capability("rwlock") {
 
 /**
  * A static rwlock initializer.
+ * 历史包袱：早年 DPDK 只支持 x86，读写锁就是自旋锁
+ * 多架构兼容：不同 CPU 原子指令不一样，必须分文件
+ * 编译时选择：用 -I 路径顺序控制包含哪个版本
+ * 真实实现：lib/eal/x86/include/rte_rwlock.h
  */
 #define RTE_RWLOCK_INITIALIZER { 0 }
 

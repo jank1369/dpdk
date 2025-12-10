@@ -7,6 +7,17 @@
 
 #include "eal_private.h"
 
+/*
+DPDK 在 PowerPC64（ppc64/powerpc64le）架构下，用于检测当前系统是否使用了 Radix MMU（也叫 Radix Tree 页表），而不是传统的 Hash MMU。
+	从 Linux 的 /proc/cpuinfo 中读取信息。
+	查找包含 MMU 的行，判断其后是否出现 : Radix。
+	如果是 Radix → 返回 true（支持）
+	如果是 Hash 或根本找不到 → 返回 false（不支持）
+
+为什么 DPDK 强制要求 Radix MMU？
+	因为从 DPDK 19.11 开始，在 POWER9 及以上处理器上，只有 Radix MMU 模式才支持 128 TiB 以上的巨大虚拟地址空间，并且支持 52-bit 虚拟地址和 5-level 页表（2M/1G hugepage 更高效）。
+Hash MMU 最大只支持 41～44-bit 虚拟地址，无法满足现代 DPDK 程序对大内存（几百 GB ~ TB 级 hugepage）的需求，容易出现 VA 空间耗尽、映射失败等问题。
+*/
 bool
 eal_mmu_supported(void)
 {

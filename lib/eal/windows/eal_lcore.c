@@ -150,6 +150,11 @@ eal_create_lcore_map(const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info)
 	return false;
 }
 
+/*
+*读取并解析 windows 下 /sys/devices/system/cpu/ 里的 CPU 拓扑信息，构建 DPDK 内部的 rte_cpu_info 结构
+*让后面的 --lcores、NUMA 内存分配、RSS 多队列绑定等功能知道“当前机器到底有哪些 CPU、哪些属于同一个 core、socket、NUMA node”。
+*没有这一步，DPDK 就完全不知道你的机器是 2 路 128 核还是 1 路 8 核，后面的所有多核调度、亲和性设置全部失效！
+*/
 int
 eal_create_cpu_map(void)
 {
@@ -160,6 +165,7 @@ eal_create_cpu_map(void)
 
 	infos = NULL;
 	infos_size = 0;
+	// 第一次调用获取所需缓冲区大小 ，获取所有 CPU 拓扑信息（（经典 Windows API 两步模式）
 	if (!GetLogicalProcessorInformationEx(
 			RelationNumaNode, NULL, &infos_size)) {
 		DWORD error = GetLastError();

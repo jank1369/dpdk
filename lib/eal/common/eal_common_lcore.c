@@ -146,6 +146,9 @@ socket_id_cmp(const void *a, const void *b)
  * Parse /sys/devices/system/cpu to get the number of physical and logical
  * processors on the machine. The function will fill the cpu_info
  * structure.
+ * 非常核心的一个初始化函数，属于 EAL（Environment Abstraction Layer）层。
+ * 它在 EAL 初始化流程的后期被调用，主要负责检测、整理和初始化系统中所有的逻辑 CPU 核，
+ * 为后续的 lcore（logical core）调度、多线程运行做好准备。
  */
 int
 rte_eal_cpu_init(void)
@@ -158,13 +161,14 @@ rte_eal_cpu_init(void)
 #if CPU_SETSIZE > RTE_MAX_LCORE
 	int lcore_to_socket_id[CPU_SETSIZE] = {0};
 #else
-	int lcore_to_socket_id[RTE_MAX_LCORE] = {0};
+	int lcore_to_socket_id[RTE_MAX_LCORE] = {0};// 临时数组：记录每个 cpu_id 属于哪个 socket
 #endif
 
 	/*
 	 * Parse the maximum set of logical cores, detect the subset of running
 	 * ones and enable them by default.
 	 */
+	/* 第一阶段：遍历所有可能的 cpu_id（0 ~ RTE_MAX_LCORE-1） */
 	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
 		lcore_config[lcore_id].core_index = count;
 
@@ -172,6 +176,7 @@ rte_eal_cpu_init(void)
 		CPU_ZERO(&lcore_config[lcore_id].cpuset);
 
 		/* find socket first */
+		/* 关键：通过底层架构函数得到该 cpu_id 所在的物理 socket */
 		socket_id = eal_cpu_socket_id(lcore_id);
 		lcore_to_socket_id[lcore_id] = socket_id;
 
@@ -182,9 +187,11 @@ rte_eal_cpu_init(void)
 		}
 
 		/* By default, lcore 1:1 map to cpu id */
+		/* 默认 1:1 映射：lcore_id == cpu_id */
 		CPU_SET(lcore_id, &lcore_config[lcore_id].cpuset);
 
 		/* By default, each detected core is enabled */
+		/* 默认全部启用为 DPDK 数据平面线程 */
 		config->lcore_role[lcore_id] = ROLE_RTE;
 		lcore_config[lcore_id].core_role = ROLE_RTE;
 		lcore_config[lcore_id].core_id = eal_cpu_core_id(lcore_id);
@@ -195,6 +202,8 @@ rte_eal_cpu_init(void)
 				lcore_config[lcore_id].numa_id);
 		count++;
 	}
+	/* 第二阶段：如果 CPU_SETSIZE > RTE_MAX_LCORE（极少见，1024核以上机器），
+       把超出的 cpu_id 只打印日志，不加入 DPDK（DPDK 目前最多支持 1024 个 lcore） */
 	for (; lcore_id < CPU_SETSIZE; lcore_id++) {
 		if (eal_cpu_detected(lcore_id) == 0)
 			continue;
@@ -206,15 +215,16 @@ rte_eal_cpu_init(void)
 	}
 
 	/* Set the count of enabled logical cores of the EAL configuration */
-	config->lcore_count = count;
+	config->lcore_count = count; // 真正可用的 lcore 数量
 	EAL_LOG(DEBUG,
 			"Maximum logical cores by configuration: %u",
 			RTE_MAX_LCORE);
 	EAL_LOG(INFO, "Detected CPU lcores: %u", config->lcore_count);
 
 	/* sort all socket id's in ascending order */
+	/* 第三阶段：统计系统中到底有多少个 NUMA node（socket） */
 	qsort(lcore_to_socket_id, RTE_DIM(lcore_to_socket_id),
-			sizeof(lcore_to_socket_id[0]), socket_id_cmp);
+			sizeof(lcore_to_socket_id[0]), socket_id_cmp); //升序排列去重
 
 	prev_socket_id = -1;
 	config->numa_node_count = 0;
