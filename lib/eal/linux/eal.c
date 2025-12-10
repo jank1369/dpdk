@@ -641,13 +641,14 @@ rte_eal_init(int argc, char **argv)
 		rte_errno = ENOTSUP;
 		goto err_out;
 	}
-
+	//读取启动参数 → 校验 → 填写 internal_config 和 rte_config → 为后续 hugepage 初始化、lcore 初始化、驱动初始化做好准备。
 	if (eal_parse_args() < 0) {
 		rte_eal_init_alert("Error parsing command line arguments.");
 		rte_errno = EINVAL;
 		goto err_out;
 	}
 
+	// 加载动态插件目录，dlopen() 网卡驱动、插件，把所有 shared driver 注册到 DPDK 驱动框架
 	if (eal_plugins_init() < 0) {
 		rte_eal_init_alert("Cannot init plugins");
 		rte_errno = EINVAL;

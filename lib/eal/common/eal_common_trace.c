@@ -37,7 +37,7 @@ trace_list_head_get(void)
 {
 	return &tp_list;
 }
-
+//初始化 DPDK 的低开销 tracing 系统，用于性能分析。
 int
 eal_trace_init(void)
 {
@@ -52,6 +52,7 @@ eal_trace_init(void)
 		goto fail;
 	}
 
+	//初始化锁
 	rte_spinlock_init(&trace.lock);
 
 	/* Is duplicate trace name registered */

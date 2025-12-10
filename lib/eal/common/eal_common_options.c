@@ -724,7 +724,11 @@ is_shared_build(void)
 	EAL_LOG(INFO, "Detected static linkage of DPDK");
 	return 0;
 }
-
+/*
+加载动态插件目录
+dlopen() 网卡驱动、插件
+把所有 shared driver 注册到 DPDK 驱动框架
+*/
 int
 eal_plugins_init(void)
 {
@@ -1904,6 +1908,7 @@ eal_parse_huge_worker_stack(const char *arg)
 }
 
 /* Parse the arguments given in the command line of the application */
+//读取启动参数 → 校验 → 填写 internal_config 和 rte_config → 为后续 hugepage 初始化、lcore 初始化、驱动初始化做好准备。
 int
 eal_parse_args(void)
 {
