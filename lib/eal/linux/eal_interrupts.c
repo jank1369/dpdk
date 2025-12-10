@@ -1158,17 +1158,32 @@ eal_intr_thread_main(__rte_unused void *arg)
 	}
 }
 
+/**
+ * 在 EAL 阶段创建一个专门的后台线程（eal-intr-thread），
+ * 通过 epoll + 自管 pipe 机制，统一处理系统中所有注册的中断源（interrupt sources），
+ * 实现“中断到来 → 唤醒 poll → 执行回调”这一整套异步事件框架。
+ * 
+ * 创建一个全局 pipe（用于动态唤醒）
+   创建一个名为 eal-intr-thread 的后台线程
+   这个线程通过 epoll 统一接管 DPDK 进程内所有异步事件（中断、定时器、alarm、lcore 唤醒等）
+ */
 int
 rte_eal_intr_init(void)
 {
 	int ret = 0;
 
 	/* init the global interrupt source head */
+	/* 1. 初始化全局中断源链表（所有中断都会挂在这里） */
 	TAILQ_INIT(&intr_sources);
 
 	/**
 	 * create a pipe which will be waited by epoll and notified to
 	 * rebuild the wait list of epoll.
+	 */
+	/**
+	 * 2. 创建一对匿名 pipe
+	 *    pipefd[0]：读端 → 扔进 epoll 监听
+	 * pipefd[1]：写端 → 其他线程想“唤醒”中断线程时，就往里写一个字节
 	 */
 	if (pipe(intr_pipe.pipefd) < 0) {
 		rte_errno = errno;
@@ -1176,6 +1191,7 @@ rte_eal_intr_init(void)
 	}
 
 	/* create the host thread to wait/handle the interrupt */
+	/* 3. 创建真正的中断处理线程 */
 	ret = rte_thread_create_internal_control(&intr_thread, "intr",
 			eal_intr_thread_main, NULL);
 	if (ret != 0) {

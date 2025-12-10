@@ -372,38 +372,49 @@ eal_proc_type_detect(void)
 }
 
 /* Sets up rte_config structure with the pointer to shared memory config.*/
+
+/**
+ * DPDK 多进程支持的唯一入口，它决定了：
+	当前进程能否创建共享内存 → 是否能当 primary
+	能否成功附加到另一个进程的内存 → 是否能当 secondary
+	版本是否一致、primary 是否允许附加 → 是否能正常协同工作
+ * 
+ */
 static int
 rte_config_init(void)
 {
 	struct rte_config *config = rte_eal_get_configuration();
 	const struct internal_config *internal_conf =
 		eal_get_internal_configuration();
-
+	/* 1. 先继承命令行或环境变量决定的进程类型 */	
 	config->process_type = internal_conf->process_type;
-
+	// 可能的值来自：
+    //   // --proc-type=primary / secondary / auto
+    //   RTE_PROC_AUTO（默认）
+    //   环境变量 RTE_PROC_TYPE
 	switch (config->process_type) {
-	case RTE_PROC_PRIMARY:
-		if (rte_eal_config_create() < 0)
-			return -1;
-		eal_mcfg_update_from_internal();
-		break;
-	case RTE_PROC_SECONDARY:
-		if (rte_eal_config_attach() < 0)
-			return -1;
-		eal_mcfg_wait_complete();
-		if (eal_mcfg_check_version() < 0) {
-			EAL_LOG(ERR, "Primary and secondary process DPDK version mismatch");
-			return -1;
-		}
-		if (rte_eal_config_reattach() < 0)
-			return -1;
-		if (!__rte_mp_enable()) {
-			EAL_LOG(ERR, "Primary process refused secondary attachment");
-			return -1;
-		}
-		eal_mcfg_update_internal();
-		break;
-	case RTE_PROC_AUTO:
+	case RTE_PROC_PRIMARY:                     // 主进程：我来创建一切
+        if (rte_eal_config_create() < 0)       // 在 /dev/shm/ 或 hugepage 目录下创建 rte_config 共享内存文件
+            return -1;                         // 失败原因：权限、目录不存在、文件已存在（另一个 primary 在跑）
+        eal_mcfg_update_from_internal();       // 把 internal_config → 共享的 mem_config
+        break;
+    case RTE_PROC_SECONDARY:                   // 从进程：我要附加到已经存在的 primary
+        if (rte_eal_config_attach() < 0)       // 找到并 mmap() 同一个 rte_config 共享内存文件
+            return -1;                         // 失败常见原因：primary 还没启动、file-prefix 不一致、版本不匹配
+        eal_mcfg_wait_complete();              // 死等 primary 把 mem_config->version 写成 RTE_MEM_CONFIG_VERSION
+        if (eal_mcfg_check_version() < 0) {    // 比对 DPDK 版本号（compile time）
+            EAL_LOG(ERR, "Primary and secondary process DPDK version mismatch");
+            return -1;                         // 超级常见！升级 DPDK 后忘了同时重编所有进程
+        }
+        if (rte_eal_config_reattach() < 0)     // 重新 attach hugepage（secondary 不能用 primary 的 VA）
+            return -1;
+        if (!__rte_mp_enable()) {              // 通过 unix socket 向 primary 发送 "I want to attach"
+            EAL_LOG(ERR, "Primary process refused secondary attachment");
+            return -1;                         // primary 加了 --no-mp-attachment 或者已达最大 secondary 数
+        }
+        eal_mcfg_update_internal();            // 把共享的 mem_config 拷贝回 internal_config
+        break;
+    case RTE_PROC_AUTO:                        // 自动模式：推荐
 	case RTE_PROC_INVALID:
 		EAL_LOG(ERR, "Invalid process type %d",
 			config->process_type);
@@ -655,22 +666,26 @@ rte_eal_init(int argc, char **argv)
 		goto err_out;
 	}
 
+	//初始化 DPDK 的低开销 tracing 系统，用于性能分析。
 	if (eal_trace_init() < 0) {
 		rte_eal_init_alert("Cannot init trace");
 		rte_errno = EFAULT;
 		goto err_out;
 	}
 
+	// 解析所有设备相关参数
 	if (eal_option_device_parse()) {
 		rte_errno = ENODEV;
 		goto err_out;
 	}
 
+	//	多进程支持的入口
 	if (rte_config_init() < 0) {
 		rte_eal_init_alert("Cannot init config");
 		goto err_out;
 	}
 
+	// 初始化全局中断子系统
 	if (rte_eal_intr_init() < 0) {
 		rte_eal_init_alert("Cannot init interrupt-handling thread");
 		goto err_out;

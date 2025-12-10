@@ -459,6 +459,7 @@ eal_option_device_add(enum rte_devtype type, const char *optarg)
 	return 0;
 }
 
+//解析 -a/-b/--vdev / 添加设备
 int
 eal_option_device_parse(void)
 {
